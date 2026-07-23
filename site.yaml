@@ -1,0 +1,6 @@
+configuration:
+  pageTitle: "GO"
+  baseUrl: "go.lllllan.cn"
+
+footerLinks:
+  GitHub: "https://github.com/blog-archives/go"
