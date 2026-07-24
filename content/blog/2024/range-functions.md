@@ -1,14 +1,16 @@
 ---
-title: 遍历函数类型
+title: 函数类型上的 range
 order: 20240820
 tags: ['range', 'iterator']
 ---
 
 > [Range Over Function Types](https://go.dev/blog/range-functions)
 
+> **一句话总结：Go 1.23 让 `for/range` 可以遍历约定签名的函数（push 迭代器），自定义容器也能复用熟悉的遍历语法；标准库 `iter` 提供统一类型别名，并可用 `iter.Pull` 转成 pull 语义。**
+
 ## 为什么需要迭代器
 
-此前 Go 允许对 `array`、`slice`、`map`、`string`、`channel` 使用 `for/range` 进行遍历。
+Go 1.23 之前，允许对 `array`、`slice`、`map`、`string`、`channel`（以及 1.22 起的 `int`）使用 `for/range` 进行遍历。
 
 ```go
 for k, v := range collection {
@@ -24,7 +26,7 @@ type Set[T comparable] struct {
 }
 ```
 
-于是 Go 官方提出了一个问题：有泛型容器了，但是没有统一的遍历方式。
+于是出现了一个生态问题：有了泛型容器，却没有统一的遍历方式——每个包都可能发明自己的循环 API。
 
 ## 在没有迭代器之前怎么解决这种问题
 
@@ -45,23 +47,28 @@ for k := range set.Data {
 - 用户依赖内部结构
 - 以后不好修改
 
-### 2. 提供回调函数
+### 2. 提供回调函数（push 雏形）
 
 ```go
-func (s *Set[T]) Each(fn func(T)) {
+func (s *Set[T]) Each(fn func(T) bool) {
     for v := range s.data {
-        fn(v)
+        if !fn(v) {
+            return
+        }
     }
 }
 
-set.Each(func(v int) {
+set.Each(func(v int) bool {
     fmt.Println(v)
+    return true
 })
 ```
 
-问题：可读性比 `for/range` 稍差。
+问题：
+- 可读性比 `for/range` 差，无法自然使用 `break` / `continue` / `return`
+- 各包回调签名不统一，很难写出跨容器的通用遍历逻辑
 
-### 3. 返回 slice
+### 3. 返回 slice（一次性物化）
 
 ```go
 func (s *Set[T]) Values() []T
@@ -71,33 +78,35 @@ for _, v := range set.Values() {
 }
 ```
 
-问题：需要一次性分配内存，如果数据量很大，可能会浪费内存、增加延迟。
+问题：需要一次性分配内存；数据量大时会浪费内存、增加延迟。这不是按需迭代，而是把全部元素先物化出来。
 
 ## 迭代器是什么
 
-> Iterator 是一种 **按需产生数据** 的机制，在 Go 中通过函数实现。
+> 迭代器是一种 **按需产生数据** 的机制，在 Go 中通过函数实现。
 
-以前是：我给你一个集合，你自己遍历。有了迭代器以后：我负责产生下一个元素，你负责单个处理。
+以前是：我给你一个集合，你自己遍历。有了 push 迭代器以后：我负责依次推送元素，你负责逐个处理。
 
 ### Go 1.23 的迭代器形式
 
-Go 没有引入下面这种传统设计：
+Go 没有引入下面这种传统 pull 接口：
 
 ```go
-Iterator interface {
-    Next()
+type Iterator[T any] interface {
+    Next() (T, bool)
 }
 ```
 
 而是让 `for/range` 能够适配特殊格式的函数：
 
 ```go
-func(yield func(T) bool)
+func(yield func() bool)
+
+func(yield func(V) bool)
 
 func(yield func(K, V) bool)
 ```
 
-官方称为 push iterator，因为迭代器主动调用 `yield` 来推送数据。
+官方称为 push 迭代器，因为迭代器主动调用 `yield` 来推送数据。选择 push 而不是 pull，是因为实现更简单：通常不需要额外的 goroutine，也不必单独管理 `stop`。
 
 ### 为什么 yield 返回 bool
 
@@ -107,7 +116,7 @@ if !yield(i) {
 }
 ```
 
-增加一个 `bool` 返回值是为了支持提前退出。
+增加一个 `bool` 返回值是为了支持提前退出。使用方 `break` 时，Go 生成的内部回调会返回 `false`，通知迭代器停止继续生成数据。
 
 ```go
 for n := range Numbers {
@@ -119,7 +128,7 @@ for n := range Numbers {
 
 ### 简单示例
 
-这里的 `yield` 并不会直接出现在使用方代码中，而是由 `for range` 隐式创建并传递给 iterator。
+这里的 `yield` 并不会直接出现在使用方代码中，而是由 `for/range` 隐式创建并传递给迭代器。
 
 例如：
 
@@ -153,53 +162,26 @@ Numbers(func(n int) bool {
 执行流程：
 
 1. `Numbers` 调用 `yield(1)`
-2. `yield` 执行循环体：
-
-    ```go
-    fmt.Println(n)
-    ```
-
-3. 返回 `true`，告诉 iterator 继续生成下一个值
-4. 直到 iterator 结束，或者使用方 `break`
-
-例如：
-
-```go
-for n := range Numbers {
-    fmt.Println(n)
-
-    if n == 3 {
-        break
-    }
-}
-```
-
-此时 Go 生成的内部回调会返回 `false`，通知 iterator 停止继续生成数据：
-
-```go
-if !yield(i) {
-    return
-}
-```
-
-于是停止继续生成数据。
+2. `yield` 执行循环体：`fmt.Println(n)`
+3. 返回 `true`，告诉迭代器继续生成下一个值
+4. 直到迭代器结束，或者使用方 `break`（此时回调返回 `false`）
 
 所以可以理解为：
 
 ```
-iterator
+迭代器
     |
     | yield(value)
     v
-for range 循环体
+for/range 循环体
     |
     | true  -> 继续
     | false -> 停止
 ```
 
-`yield` 就是 iterator 和使用方之间的控制通道：iterator 通过它发送数据，使用方通过返回值控制是否继续。
+`yield` 就是迭代器和使用方之间的控制通道：迭代器通过它发送数据，使用方通过返回值控制是否继续。
 
-Go 选择函数作为 iterator 的实现形式，是为了让自定义数据结构能够复用熟悉的 `for/range` 语法，从而通过一致性提升可读性。
+Go 选择函数作为迭代器的实现形式，是为了让自定义数据结构能够复用熟悉的 `for/range` 语法，从而通过一致性提升可读性。
 
 ### 代入自定义 Set
 
@@ -223,7 +205,7 @@ func (s *Set[T]) All() iter.Seq[T] {
 
 什么是 `iter.Seq`？
 
-> Go 1.23 新增标准库 `iter` 包，用于定义 iterator 类型：
+> Go 1.23 新增标准库 `iter` 包，用于定义迭代器类型：
 
 ```go
 type Seq[V any] func(yield func(V) bool)
@@ -231,14 +213,14 @@ type Seq[V any] func(yield func(V) bool)
 type Seq2[K, V any] func(yield func(K, V) bool)
 ```
 
-需要注意的是：`range over function` 本身是语言特性，并不依赖 `iter` 包；`iter` 只是提供了统一的类型别名，方便在标准库和业务代码中复用。
+需要注意的是：`range over function` 本身是语言特性，并不依赖 `iter` 包；`iter` 只是提供了统一的类型别名，方便在标准库和业务代码中复用。标准库里已有不少现成用法，例如 `slices.All`、`maps.Keys`、`maps.Values`。
 
-## Push iterator vs Pull iterator
+## Push 迭代器 vs Pull 迭代器
 
-Push iterator 和 Pull iterator 的主要区别在于「谁控制数据流动」。
+两者的主要区别在于「谁控制数据流动」。
 
-* **Push iterator**：iterator 主动调用 `yield` 提供数据 → 适合遍历和流式处理
-* **Pull iterator**：消费者主动调用 `Next()` 获取数据 → 适合精细控制读取过程
+* **Push 迭代器**：迭代器主动调用 `yield` 提供数据 → 适合遍历和流式处理
+* **Pull 迭代器**：消费者主动调用 `next()` 获取数据 → 适合精细控制读取过程
 
 ```go
 // Push
@@ -248,17 +230,22 @@ func(yield func(int) bool) {
     yield(3)
 }
 
-// Pull
-value, ok := iterator.Next()
+// Pull（由 iter.Pull 从 push 迭代器转换而来）
+next, stop := iter.Pull(seq)
+defer stop()
+
+value, ok := next()
 ```
 
-Go 1.23 的 `range over function` 选择了 push iterator，因为它能让自定义数据结构拥有类似 slice、map 的自然遍历体验。若需要 pull 语义，可通过标准库的 `iter.Pull` / `iter.Pull2` 将 push iterator 转换出来。
+Go 1.23 的 `range over function` 选择了 push 迭代器，因为它能让自定义数据结构拥有类似 slice、map 的自然遍历体验。若需要 pull 语义，可通过标准库的 `iter.Pull` / `iter.Pull2` 将 push 迭代器转换出来。
 
 ## 开发中的实际用途
 
 ### 数据库批量读取
 
 处理大量数据库数据时，可以通过 `yield` 逐条返回结果，避免一次性加载所有数据。例如导出千万级用户数据时，查询一条处理一条。
+
+下面是示意代码（省略了查询与错误处理）：
 
 ```go
 func Users(yield func(User) bool) {
@@ -279,6 +266,8 @@ for user := range Users {
 ### 日志文件扫描
 
 读取大文件时，可以通过 `yield` 持续产生每一行内容，调用方按需处理，不需要把整个文件读入内存。
+
+注意：push 迭代器本身不易直接返回错误；打开失败时下面直接 `return`，调用方无法区分「文件为空」和「打开失败」。生产代码通常需要额外约定错误传递方式（例如 yield 错误值，或在迭代器外先打开文件）。
 
 ```go
 func Lines(path string) iter.Seq[string] {
@@ -305,9 +294,9 @@ for line := range Lines("app.log") {
 }
 ```
 
-### 自定义数据结构遍历（Push Iterator）
+### 自定义数据结构遍历（Push）
 
-对于树、图等复杂结构，可以实现 iterator，让使用者直接通过 `range` 遍历内部数据。
+对于树、图等复杂结构，可以实现迭代器，让使用者直接通过 `for/range` 遍历内部数据。
 
 ```go
 func (t *Tree) Nodes() iter.Seq[*Tree] {
@@ -343,17 +332,20 @@ for node := range tree.Nodes() {
 }
 ```
 
-### 分页接口读取（Pull Iterator）
+### 分页接口读取（Pull）
 
-调用分页接口时，可以通过 `Next()` 主动获取下一批数据，由业务决定什么时候继续读取。
+调用分页接口时，可以用 `iter.Pull` 转成 pull 语义，由业务主动决定何时继续读取。
 
 ```go
+next, stop := iter.Pull(Users)
+defer stop()
+
 for {
-    users, ok := iterator.Next()
+    user, ok := next()
     if !ok {
         break
     }
 
-    process(users)
+    process(user)
 }
 ```
