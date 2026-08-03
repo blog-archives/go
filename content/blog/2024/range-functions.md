@@ -6,7 +6,7 @@ tags: ['range', 'iterator']
 
 > [Range Over Function Types](https://go.dev/blog/range-functions)
 
-> **一句话总结：Go 1.23 让 `for/range` 可以遍历约定签名的函数（push 迭代器），自定义容器也能复用熟悉的遍历语法；标准库 `iter` 提供统一类型别名，并可用 `iter.Pull` 转成 pull 语义。**
+> **Go 1.23 让 `for/range` 可以遍历约定签名的函数（push 迭代器），自定义容器也能复用熟悉的遍历语法；标准库 `iter` 提供统一类型别名，并可用 `iter.Pull` 转成 pull 语义。**
 
 ## 为什么需要迭代器
 

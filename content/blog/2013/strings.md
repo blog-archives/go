@@ -7,7 +7,7 @@ tags: ['strings', 'byte', 'rune']
 > [Strings, bytes, runes and characters in Go](https://go.dev/blog/strings)
 
  
-> **一句话总结：Go 的 `string` 本质是一个只读的字节序列（read-only slice of bytes），而不是字符数组。理解 `byte`、`Unicode`、`UTF-8` 和 `rune` 的关系，才能真正理解 Go 的字符串。**
+> **Go 的 `string` 本质是一个只读的字节序列（read-only slice of bytes），而不是字符数组。理解 `byte`、`Unicode`、`UTF-8` 和 `rune` 的关系，才能真正理解 Go 的字符串。**
 
 ## string 是什么？
 

@@ -6,7 +6,7 @@ tags: ['error']
 
 > [Working with Errors in Go 1.13](https://go.dev/blog/go1.13-errors)
 
-> **一句话总结：Go 1.13 用 `%w` 包装错误形成错误链，再用 `errors.Is` / `errors.As` 沿链检查哨兵值或提取具体类型。**
+> **Go 1.13 用 `%w` 包装错误形成错误链，再用 `errors.Is` / `errors.As` 沿链检查哨兵值或提取具体类型。**
 
 用 `fmt.Errorf` 配合 `%w` 包装错误，既补充上下文，又保留底层错误供后续检查：
 
