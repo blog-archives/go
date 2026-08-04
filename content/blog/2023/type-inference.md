@@ -1,6 +1,7 @@
 ---
 title: 类型推断
 order: 20231009
+tags: ['type']
 ---
 
 > [Everything You Always Wanted to Know About Type Inference - And a Little Bit More](https://go.dev/blog/type-inference)

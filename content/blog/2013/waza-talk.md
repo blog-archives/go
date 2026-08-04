@@ -1,7 +1,7 @@
 ---
 title: 并发并不等于平行处理
 order: 20130116
-tags: ['concurrency']
+tags: ['concurrency', 'parallelism']
 ---
 
 > [Concurrency is not parallelism](https://go.dev/blog/waza-talk)

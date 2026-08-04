@@ -1,7 +1,7 @@
 ---
 title: Go 并发模式：上下文处理
 order: 20140729
-tags: ['context']
+tags: ['context', 'cancel']
 ---
 
 > [Go Concurrency Patterns: Context](https://go.dev/blog/context)

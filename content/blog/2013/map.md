@@ -1,7 +1,7 @@
 ---
 title: Go maps 的实际应用
 order: 20130206
-tags: ['map']
+tags: ['map', 'concurrent']
 ---
 
 > [Go maps in action](https://go.dev/blog/maps)

@@ -1,7 +1,7 @@
 ---
 title: 反射定律
 order: 20110906
-tags: ['reflect']
+tags: ['reflect', 'interface', 'struct']
 ---
 
 > [The Laws of Reflection](https://go.dev/blog/laws-of-reflection)

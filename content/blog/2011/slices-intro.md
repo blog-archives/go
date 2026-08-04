@@ -1,7 +1,7 @@
 ---
 title: Go 切片：使用方式及内部机制
 order: 20110105
-tags: ['slice']
+tags: ['slice', 'array', 'copy', 'append']
 ---
 
 > [Go Slices: usage and internals](https://go.dev/blog/slices-intro)

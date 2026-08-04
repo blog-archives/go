@@ -1,7 +1,7 @@
 ---
 title: 类型构造与循环检测
 order: 20260324
-tags: ['type']
+tags: ['type', 'detection']
 ---
 
 > [Type Construction and Cycle Detection](https://go.dev/blog/type-construction-and-cycle-detection)

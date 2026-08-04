@@ -1,6 +1,7 @@
 ---
-title: Defer, Panic, and Recover
+title: defer、panic 和 recover
 order: 20100804
+tags: ['defer', 'panic', 'recover']
 ---
 
 > [Defer, Panic, and Recover](https://go.dev/blog/defer-panic-and-recover)
